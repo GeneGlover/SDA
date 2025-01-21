@@ -1,0 +1,148 @@
+---
+title: "SDA"
+output: html_document
+date: "2024-09-11"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("renv")
+renv::init()y
+```
+
+```{r}
+renv::install("ggplot2")
+
+
+
+```
+
+
+
+
+```{r}
+ggplot(aes(x=Time_Actual, y=Average_VCO2, color = Individual_TrialType), data= SDAmaster) +
+  geom_smooth() +
+  labs(title="VCO2 Over Time", x="Time", y="VCO2")
+```
+
+
+```{r}
+SDA_7p <- SDAmaster %>%
+  filter(TrialType == "7p")
+
+ggplot(aes(x=Time_Actual, y=Average_VCO2, color = Individual_TrialType), data= SDA_7p) +
+  geom_smooth() +
+  labs(title="VCO2 Over Time 7p", x="Time", y="VCO2")
+
+SDA_control <- SDAmaster %>%
+  filter(TrialType == "control")
+
+ggplot(aes(x=Time_Actual, y=Average_VCO2, color = Individual_TrialType), data= SDA_control) +
+  geom_smooth() +
+  labs(title="VCO2 Over Time Control", x="Time", y="VCO2")
+
+SDA_xp <- SDAmaster %>%
+  filter(TrialType == "xp")
+
+ggplot(aes(x=Time_Actual, y=Average_VCO2, color = Individual_TrialType), data= SDA_xp) +
+  geom_smooth() +
+  labs(title="VCO2 Over Time xp", x="Time", y="VCO2")
+```
+
+```{r}
+SDAmaster <- SDAmaster %>%
+  mutate(Individual_TrialType = paste(Individual, TrialType, sep = "_"))
+
+ggplot(aes(x=Time_Actual, y=Average_VCO2,  color = Individual_TrialType), data= SDAmaster) +
+  geom_smooth() +
+  labs(title="VCO2 Over Time 7p", x="Time", y="VCO2")
+
+
+```
+
+
+
+
+```{r}
+SDA_Brygooi <- SDAmaster %>%
+  filter(Species == "Brygooi")
+
+ggplot(aes(x=Time_Actual, y=Average_VO2, color = Individual_TrialType), data= SDA_Brygooi) +
+  geom_smooth() +
+  labs(title="VO2 Over Time", x="Time", y="VO2")
+
+SDA_Thieli <- SDAmaster %>%
+  filter(Species == "Thieli")
+
+ggplot(aes(x=Time_Actual, y=Average_VO2, color = Individual_TrialType), data= SDA_Thieli) +
+  geom_smooth() +
+  labs(title="VO2 Over Time", x="Time", y="VO2")
+```
+
+
+
+```{r}
+ggplot(aes(x=Time_Actual, y=Average_VH2O, color = Individual_TrialType), data= SDA_Brygooi) +
+  geom_smooth() +
+  labs(title="VH2O Over Time", x="Time", y="VH2O")+
+  ylim(-10, 80)
+
+
+ggplot(aes(x=Time_Actual, y=Average_VH2O, color = Individual_TrialType), data= SDA_Thieli) +
+  geom_smooth() +
+  labs(title="VH2O Over Time", x="Time", y="VH2O")+
+  ylim(-10, 80)
+```
+
+
+
+
+
+```{r}
+ggplot(aes(x=Time_Since_Beginnng, y=Body_Mass, color = Individual), data= SDA_Feedings_10_9) +
+  geom_line() +
+  labs(title="Body Mass by Time", x="Date", y="Body Mass")
+```
+
+
+
+filtered_data <- data %>%
+  filter(individual_id %in% c("ID1", "ID2"))
+
+
+```{r}
+SDA_heros <- SDAmaster %>%
+  filter(Individual == c("BbrygM01", "BthieM01"))
+
+ggplot(aes(x=Time_Actual, y=Average_VCO2, color = Individual_TrialType), data= SDA_heros) +
+  geom_smooth() +
+  labs(title="VCO2 Over Time 7p", x="Time", y="VCO2")
+```
+
+
+
+```{r}
+SDA_heros <- SDAmaster %>%
+  filter(Individual == c("BbrygM02", "BthieM01"))
+
+ggplot(aes(x=Time_Actual, y=Average_VCO2, color = Individual_TrialType), data= SDA_heros) +
+  geom_smooth() +
+  labs(title="VCO2 Over Time 7p", x="Time", y="VCO2")
+```
+
+
+
+
+```{r}
+SDA_BthieM01 <- SDAmaster %>%
+  filter(Individual == "BthieM01")
+
+ggplot(aes(x=Time_Actual, y=Average_VCO2, color = Individual_TrialType), data= SDA_BthieM01) +
+  geom_point() +
+  labs(title="VCO2 Over Time 7p", x="Time", y="VCO2")
+```
+
