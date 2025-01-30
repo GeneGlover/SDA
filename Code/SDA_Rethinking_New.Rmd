@@ -1,0 +1,228 @@
+---
+title: "Trial Code"
+output: html_document
+date: "2025-01-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+```{r}
+
+sd_tidy6 <- SDAmaster %>%
+  mutate(SpeciesTrialType = paste(Species, TrialType, sep = "_")) %>%
+  filter(Individual %in% c("BthieM01", "BbrygM02")) %>%
+  filter(TrialType %in% c("xp", "controlxp"))
+
+
+
+
+
+#This makes a dataset with all of the variables + New standardized Variables
+sd_tidy_heros6  = sd_tidy6 %>% 
+  mutate(T2 = standardize(Time_Actual),
+         STT = as.integer(as.factor(SpeciesTrialType)),
+         CO2 = standardize(Average_VCO2),
+         Species1 = as.integer(as.factor(Species)),
+         TrialType1 = as.integer(as.factor(TrialType)),
+         CPercent = standardize(Cricket_Percent),
+         logmass = log(Body_Mass),
+         logmass1 = standardize(logmass),
+         TrialType,
+         Species)
+
+
+sd_short_heros6 = sd_tidy_heros6 %>% dplyr::select(CO2, Species1, Species, T2, TrialType1, CPercent, TrialType, STT, logmass1)
+
+```
+
+
+
+
+
+
+```{r}
+CO2_Time_heros <-ulam(
+alist(
+  CO2 ~ dnorm(mu,sigma),
+  #This includes an interaction between Time and Time squared since it is likely an upside down parabola. Each time you add the bracketed things it adds another line for that category
+  mu <- a1[STT] + b1[STT] * T2 + b2[STT] * T2^2 + b3[STT] * logmass1 + b4[STT] * CPercent,
+  c(a1, b1, b2, b3, b4)[STT] ~ multi_normal(c(a, b), Rho, sigma_id),
+  a ~ dnorm(0, 1),
+  b ~ dnorm(0, 1),
+  sigma_id ~ dexp(1),
+  Rho ~ lkj_corr(2),
+  sigma ~ dexp(1)
+) ,data = sd_short_heros6, chains = 4, cores = 4)
+```
+
+
+
+```{r}
+precis(CO2_Time_heros, depth = 3)
+```
+
+
+```{r}
+# Set up a multi-panel layout: 2 rows, 3 columns (for 6 STT categories)
+par(mfrow = c(2, 2), mar = c(4, 4, 2, 1))
+
+# X-axis sequence
+t2_seq <- seq(-1.3, 2.6, length.out = 30)
+
+stt_colors2 <- c("blue", "blue", "red", "red") 
+
+# Define the real names for each STT category
+stt_names <- c( "Brygooi Fasted after xp", "Brygooi xp", "Thieli Fasted after xp", "Thieli xp")
+
+
+# Loop through each STT category
+for (stt in 1:4) {
+  # Generate posterior predictions
+  mu_pred <- link(CO2_Time_heros, data = data.frame(T2 = t2_seq, STT = stt,
+    logmass1 = mean(sd_short_heros6$logmass1[sd_short_heros6$STT == stt], na.rm = TRUE),
+    CPercent = mean(sd_short_heros6$CPercent[sd_short_heros6$STT == stt], na.rm = TRUE)))
+  
+  # Calculate mean and 95% CI
+  mu_mean <- apply(mu_pred, 2, mean)
+  mu_PI <- apply(mu_pred, 2, PI, prob = 0.95)
+  
+  # Filter observed data for this STT category
+  observed_data <- sd_short_heros6 %>% filter(STT == stt)
+  
+  # Plot observed data
+  plot(observed_data$T2, observed_data$CO2,
+       col = "black", pch = 16, cex = 0.7,
+       xlab = "Time", ylab = "VCO2",
+       main = stt_names[stt],
+       ylim = range(c(observed_data$CO2, mu_PI)),
+       xlim = range(t2_seq))
+  
+  # Add predicted mean line
+  lines(t2_seq, mu_mean, col = stt_colors2[stt], lwd = 2)
+  
+  # Add shaded confidence intervals
+  polygon(c(t2_seq, rev(t2_seq)),
+          c(mu_PI[1, ], rev(mu_PI[2, ])),
+          col = rgb(0, 0, 1, alpha = 0.2), border = NA)
+}
+
+# Reset layout to single panel
+par(mfrow = c(1, 1))
+```
+
+```{r}
+#This creates the x axis of the plot
+t4_seq = seq(-1.3, 2.6, length.out = 1000)
+
+
+mu_pred1b <- link(CO2_Time_heros, data = data.frame(T2 = t4_seq,
+                                       STT = 2,
+    logmass1 = mean(sd_short_heros6$logmass1[sd_short_heros6$STT == stt], na.rm = TRUE),
+    CPercent = mean(sd_short_heros6$CPercent[sd_short_heros6$STT == stt], na.rm = TRUE)))
+mu_mean1b <- apply(mu_pred1b, 2, mean)
+mu_PI1b <- apply(mu_pred1b, 2, PI, prob = 0.95)
+
+times = tibble(t4_seq = t4_seq) %>% 
+  mutate(name = paste0("V", row_number()))
+mu_pred1b %>% as_data_frame() %>% 
+  mutate(iter = 1:nrow(.)) %>% 
+  pivot_longer(cols = -iter) %>% 
+  left_join(times) %>% 
+  group_by(iter) %>% 
+  filter(value == max(value)) %>% 
+  ungroup %>% 
+  reframe(mean = mean(t4_seq),
+          sd = sd(t4_seq))
+
+tibble(mean = mu_mean1b,
+       lower = mu_PI1b[1,],
+       upper = mu_PI1b[2,],
+       sd = sd(mu_mean1b),
+       time = t4_seq) %>% 
+  arrange(-mean)
+
+mean_VCO_Brygooi <- 3.172267753 * sd(sd_tidy6$Average_VCO2) + mean(sd_tidy6$Average_VCO2)
+upper_VCO_Brygooi <- (3.172267753 + 1.96 * (1.207533)) * sd(sd_tidy6$Average_VCO2) + mean(sd_tidy6$Average_VCO2)
+lower_VCO_Brygooi <- (3.172267753 - 1.96 * (1.207533)) * sd(sd_tidy6$Average_VCO2) + mean(sd_tidy6$Average_VCO2)
+
+
+mean_VCO_Brygooi
+upper_VCO_Brygooi
+lower_VCO_Brygooi
+
+mean_time_Brygooi <- -0.461217 * sd(sd_tidy6$Time_Actual) + mean(sd_tidy6$Time_Actual)
+upper_time_Brygooi <- (-0.461217 + 1.96 * (0.1754879)) * sd(sd_tidy6$Time_Actual) + mean(sd_tidy6$Time_Actual)
+lower_time_Brygooi <- (-0.461217 - 1.96 * (0.1754879)) * sd(sd_tidy6$Time_Actual) + mean(sd_tidy6$Time_Actual)
+
+
+mean_time_Brygooi
+upper_time_Brygooi
+lower_time_Brygooi
+```
+
+
+
+
+```{r}
+#This creates the x axis of the plot
+t4_seq = seq(-1.3, 2.6, length.out = 1000)
+
+
+mu_pred1b <- link(CO2_Time_heros, data = data.frame(T2 = t4_seq,
+                                       STT = 4,
+    logmass1 = mean(sd_short_heros6$logmass1[sd_short_heros6$STT == stt], na.rm = TRUE),
+    CPercent = mean(sd_short_heros6$CPercent[sd_short_heros6$STT == stt], na.rm = TRUE)))
+mu_mean1b <- apply(mu_pred1b, 2, mean)
+mu_PI1b <- apply(mu_pred1b, 2, PI, prob = 0.95)
+
+times = tibble(t4_seq = t4_seq) %>% 
+  mutate(name = paste0("V", row_number()))
+mu_pred1b %>% as_data_frame() %>% 
+  mutate(iter = 1:nrow(.)) %>% 
+  pivot_longer(cols = -iter) %>% 
+  left_join(times) %>% 
+  group_by(iter) %>% 
+  filter(value == max(value)) %>% 
+  ungroup %>% 
+  reframe(mean = mean(t4_seq),
+          sd = sd(t4_seq))
+
+tibble(mean = mu_mean1b,
+       lower = mu_PI1b[1,],
+       upper = mu_PI1b[2,],
+       sd = sd(mu_mean1b),
+       time = t4_seq) %>% 
+  arrange(-mean)
+
+mean_VCO_Thieli <- 1.3394284372 * sd(sd_tidy6$Average_VCO2) + mean(sd_tidy6$Average_VCO2)
+upper_VCO_Thieli <- (1.3394284372 + 1.96 * (0.9437593)) * sd(sd_tidy6$Average_VCO2) + mean(sd_tidy6$Average_VCO2)
+lower_VCO_Thieli <- (1.3394284372 - 1.96 * (0.9437593)) * sd(sd_tidy6$Average_VCO2) + mean(sd_tidy6$Average_VCO2)
+
+
+mean_VCO_Thieli
+upper_VCO_Thieli
+lower_VCO_Thieli
+
+mean_time_Thieli <- 0.2933491 * sd(sd_tidy6$Time_Actual) + mean(sd_tidy6$Time_Actual)
+upper_time_Thieli <- (0.2933491 + 1.96 * (0.02986)) * sd(sd_tidy6$Time_Actual) + mean(sd_tidy6$Time_Actual)
+lower_time_Thieli <- (0.2933491 - 1.96 * (0.02986)) * sd(sd_tidy6$Time_Actual) + mean(sd_tidy6$Time_Actual)
+
+
+mean_time_Thieli
+upper_time_Thieli
+lower_time_Thieli
+```
+
+
+
+
+
+
+
+
+

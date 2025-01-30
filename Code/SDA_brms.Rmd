@@ -1,0 +1,223 @@
+---
+title: "SDA_brms"
+output: html_document
+date: "2025-01-28"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+
+```{r}
+#install.packages("brms")
+#install.packages("janitor")
+#install.packages("tidyverse")
+#install.packages("tidybayes")
+#install.packages("rethinking")
+
+library(brms)
+library(janitor)
+library(tidyverse)
+library(tidybayes)
+library(rethinking)
+```
+
+#brms
+
+brmModel <- brm(Petal.Length ~ Sepal.Length,
+                , data = iris,
+                family = Gamma(ling = "log"),
+                prior = c(prior(normal(0,5), class = b),
+                          prior(normal(-5, 2), class = Intercept),
+                          prior(exponential(1), class = sigma)))
+
+brmModel2 <- brm(Petal.Length ~ 1 + Sepal.Length + (1 + Sepal.Length|Species),
+                , data = iris,
+                family = Gamma(link = "log"))
+
+saveRDS(brmModel2, file = "Bayesian/brmModel2.rds")
+
+brmModel2 - readRDS(brmModel2, file = "Bayesian/brmModel2.rds")
+
+summary(brmModel)
+iris_clean = iris %>% clean_names()
+
+
+mod_brm_update = update(brmModel, newdata = iris_clean,
+                        formula = petal_length ~ sepal_length,
+                         prior = c(prior(normal(0,5), class = b),
+                          prior(normal(-5, 2), class = Intercept),
+                          prior(exponential(1), class = sigma)))
+
+plot_data <- plot(conditional_effects(brmModel2), points = T)
+
+plot_data$Sepal.Length:Species +
+  labs(y = "Petal Length (mm)",
+       x = "Sepal Length (mm)")
+
+
+```{r}
+#Here I've made a new index variable which includes both Species and TrialType
+sd_tidy = SDAmaster %>%
+  mutate(SpeciesTrialType = paste(Species, TrialType, sep = "_"))
+
+sd_tidy_heros <- sd_tidy %>%
+  filter(Individual == c("BthieM01", "BbrygM02"))
+
+
+#This makes a dataset with all of the variables + New standardized Variables
+sd_tidy_heros3  = sd_tidy_heros %>% 
+  mutate(T2 = standardize(Time_Actual),
+         STT = as.integer(as.factor(SpeciesTrialType)),
+         CO2 = standardize(Average_VCO2),
+         Species1 = as.integer(as.factor(Species)),
+         TrialType1 = as.integer(as.factor(TrialType)),
+         CPercent = standardize(Cricket_Percent),
+         logmass = log(Body_Mass),
+         logmass1 = standardize(logmass),
+         TrialType,
+         Species)
+
+#This makes a much smaller dataset with only what you need which keeps the model from running the entire data set and lowers the amount of time it takes
+
+sd_short_heros3 = sd_tidy_heros3 %>% dplyr::select(CO2, Species1, Species, T2, TrialType1, CPercent, TrialType, STT, logmass1)
+```
+
+
+```{r}
+
+
+brmModel2 <- brm(CO2 ~ 1 + T2 + (1 + T2|STT),
+                , data = sd_short_heros3,
+                family = gaussian(link = "log"))
+
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+plot_data <- plot(conditional_effects(brmModel2), points = T)
+
+plot_data$T2:STT +
+  labs(y = "Petal Length (mm)",
+       x = "Sepal Length (mm)")
+```
+
+
+```{r}
+CO2_Time4b_brms <- brm(
+  formula = CO2 ~ 1 + T2 + I(T2^2) + logmass1 + CPercent +  # Fixed effects
+    (1 + T2 + I(T2^2) + logmass1 + CPercent || STT),        # Group-level effects with separate variances
+  data = sd_short_heros3,
+  family = gaussian()
+)
+```
+
+
+```{r}
+plot(CO2_Time4b_brms)
+```
+
+```{r}
+summary(CO2_Time4b_brms)
+```
+
+```{r}
+fixef(CO2_Time4b_brms)
+```
+
+```{r}
+# Random effects for each STT category
+ranef(CO2_Time4b_brms)
+
+# Combined effects (fixed + random)
+coef(CO2_Time4b_brms)
+
+# Marginal effects plots
+conditional_effects(CO2_Time4b_brms, effects = "STT")
+```
+
+```{r}
+bayes_R2(CO2_Time4b_brms)
+```
+
+
+
+
+
+
+
+
+,                                      # Normal distribution
+  prior = c(
+    # Priors for fixed effects
+    prior(normal(0, 1), class = "Intercept"),                # Prior for intercept
+    prior(normal(0, 1), class = "b"),                        # Prior for slopes (T2, T2^2, etc.)
+    
+    # Priors for group-level effects
+    prior(exponential(1), class = "sd"),                     # Prior for standard deviations
+    prior(lkj(2), class = "cor")                             # LKJ prior for correlation matrix
+  ),
+  chains = 4, cores = 4, iter = 2000, seed = 123
+)
+
+```{r}
+saveRDS(CO2_Time4b_brms, file = "C:/Users/19glo/OneDrive - The University of South Dakota/SDA/SDA/CO2_Time4b_brms.rds")
+
+```
+
+```{r}
+# Set up a multi-panel layout: 2 rows, 3 columns (for 6 STT categories)
+par(mfrow = c(2, 4), mar = c(4, 4, 2, 1))
+
+# X-axis sequence
+t2_seq <- seq(-1.3, 2.6, length.out = 30)
+
+stt_colors2 <- c("blue", "blue", "blue", "blue", "red", "red", "red", "red") 
+
+# Define the real names for each STT category
+stt_names <- c("Brygooi 7p", "Brygooi Fasted after 7p", "Brygooi Fasted after xp", "Brygooi xp", "Thieli 7p", "Thieli Fasted after 7p", "Thieli Fasted after xp", "Thieli xp")
+
+
+# Loop through each STT category
+for (stt in 1:8) {
+  # Generate posterior predictions
+  mu_pred <- link(CO2_Time4b_brms, data = data.frame(T2 = t2_seq, STT = stt,
+    logmass1 = mean(sd_short3$logmass1[sd_short3$STT == stt], na.rm = TRUE),
+    CPercent = mean(sd_short3$CPercent[sd_short3$STT == stt], na.rm = TRUE)))
+  
+  # Calculate mean and 95% CI
+  mu_mean <- apply(mu_pred, 2, mean)
+  mu_PI <- apply(mu_pred, 2, PI, prob = 0.95)
+  
+  # Filter observed data for this STT category
+  observed_data <- sd_short3 %>% filter(STT == stt)
+  
+  # Plot observed data
+  plot(observed_data$T2, observed_data$CO2,
+       col = "black", pch = 16, cex = 0.7,
+       xlab = "Time", ylab = "VCO2",
+       main = stt_names[stt],
+       ylim = range(c(observed_data$CO2, mu_PI)),
+       xlim = range(t2_seq))
+  
+  # Add predicted mean line
+  lines(t2_seq, mu_mean, col = stt_colors2[stt], lwd = 2)
+  
+  # Add shaded confidence intervals
+  polygon(c(t2_seq, rev(t2_seq)),
+          c(mu_PI[1, ], rev(mu_PI[2, ])),
+          col = rgb(0, 0, 1, alpha = 0.2), border = NA)
+}
+
+# Reset layout to single panel
+par(mfrow = c(1, 1))
+```
+
